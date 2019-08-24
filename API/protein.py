@@ -90,17 +90,23 @@ class Protein:
         edges = []
         for n in tri.simplices:
             edge = sorted([n[0], n[1]])
-            if get_dist(coords_array[edge[0]], coords_array[edge[1]]) <= self.distance_cutoff: edges.append((edge[0], edge[1]))
+            if get_dist(self.residues[coords_resid[tuple(list(coords_array[edge[0]]))]].get_centroid(), self.residues[coords_resid[tuple(list(coords_array[edge[1]]))]].get_centroid()) <= self.distance_cutoff:
+                edges.append((edge[0], edge[1]))
             edge = sorted([n[0], n[2]])
-            if get_dist(coords_array[edge[0]], coords_array[edge[1]]) <= self.distance_cutoff: edges.append((edge[0], edge[1]))
+            if get_dist(self.residues[coords_resid[tuple(list(coords_array[edge[0]]))]].get_centroid(), self.residues[coords_resid[tuple(list(coords_array[edge[1]]))]].get_centroid()) <= self.distance_cutoff:
+                edges.append((edge[0], edge[1]))
             edge = sorted([n[0], n[3]])
-            if get_dist(coords_array[edge[0]], coords_array[edge[1]]) <= self.distance_cutoff: edges.append((edge[0], edge[1]))
+            if get_dist(self.residues[coords_resid[tuple(list(coords_array[edge[0]]))]].get_centroid(), self.residues[coords_resid[tuple(list(coords_array[edge[1]]))]].get_centroid()) <= self.distance_cutoff:
+                edges.append((edge[0], edge[1]))
             edge = sorted([n[1], n[2]])
-            if get_dist(coords_array[edge[0]], coords_array[edge[1]]) <= self.distance_cutoff: edges.append((edge[0], edge[1]))
+            if get_dist(self.residues[coords_resid[tuple(list(coords_array[edge[0]]))]].get_centroid(), self.residues[coords_resid[tuple(list(coords_array[edge[1]]))]].get_centroid()) <= self.distance_cutoff:
+                edges.append((edge[0], edge[1]))
             edge = sorted([n[1], n[3]])
-            if get_dist(coords_array[edge[0]], coords_array[edge[1]]) <= self.distance_cutoff: edges.append((edge[0], edge[1]))
+            if get_dist(self.residues[coords_resid[tuple(list(coords_array[edge[0]]))]].get_centroid(), self.residues[coords_resid[tuple(list(coords_array[edge[1]]))]].get_centroid()) <= self.distance_cutoff:
+                edges.append((edge[0], edge[1]))
             edge = sorted([n[2], n[3]])
-            if get_dist(coords_array[edge[0]], coords_array[edge[1]]) <= self.distance_cutoff: edges.append((edge[0], edge[1]))
+            if get_dist(self.residues[coords_resid[tuple(list(coords_array[edge[0]]))]].get_centroid(), self.residues[coords_resid[tuple(list(coords_array[edge[1]]))]].get_centroid()) <= self.distance_cutoff:
+                edges.append((edge[0], edge[1]))
         graph = nx.Graph(edges)
         self.atom_cliques = list(nx.find_cliques(graph))
         temp_arr = []
@@ -123,9 +129,10 @@ class Protein:
             self.generate_atom_cliques()
         else: raise Exception("Invalid clique type")
 
-    def getMaxMinDistance(coords):
+    def getMaxMinDistance(self, coords):
         max_dist = 0
         min_dist = 10000
+        if len(coords) == 1: return 0, 0
         for i in range(len(coords)-1):
             for j in range(i+1, len(coords)):
                 dist = get_dist(coords[i], coords[j])
@@ -133,8 +140,22 @@ class Protein:
                 min_dist = min([min_dist, dist])
         return max_dist, min_dist
 
-    def distance_analysis(self):
-        pass
+    def distance_analysis(self, clique_type):
+        if clique_type == "centroid": 
+            for i in self.centroid_cliques:
+                coords = []
+                for res in i:
+                    coords.append(res.get_centroid())
+                clique_max, clique_min = self.getMaxMinDistance(coords)
+                print(clique_min, clique_max)
+        elif clique_type == "atom":
+            for i in self.atom_cliques:
+                coords = []
+                for res in i:
+                    coords.append(res.get_centroid())
+                clique_max, clique_min = self.getMaxMinDistance(coords)
+                print(clique_min, clique_max)
+        else: raise Exception("Invalid clique type")
 
     def freq_analysis(self, clique_type):
         freq_arr = [0,0,0,0,0,0,0]
@@ -144,6 +165,7 @@ class Protein:
         elif clique_type == "atom":
             for i in self.atom_cliques:
                 freq_arr[len(i)] += 1
+        else: raise Exception("Invalid clique type")
         print(freq_arr)
         
 
@@ -154,4 +176,6 @@ def test():
     protein.generate_cliques("centroid")
     protein.freq_analysis("centroid")
     protein.freq_analysis("atom")
+    protein.distance_analysis("atom")
+    #print(protein.centroid_cliques[0][1].get_centroid())
 
