@@ -8,12 +8,13 @@ import networkx as nx
 import csv
 import math
 import time
+import matplotlib.pyplot as plt
 
 ###############################################################################################
 #TODOs:
-#   make option to exclude/include backbone atoms
+#   make option to exclude/include backbone atoms(50% completion)
 #   csv data logging
-#   matplotlib graphing methods
+#   matplotlib/excel/google_sheets graphing methods
 #   other data analysis methods[*priority*: benchmark to new analysis]
 ###############################################################################################
 
@@ -27,7 +28,9 @@ class Protein:
         self.residues = {}
         self.atom_cliques = None
         self.centroid_cliques = None
-        self.distance_cutoff = 6
+        #self.distance_cutoff = 6
+        self.centroid_clique_frequency = None
+        self.atom_clique_frequency = None
         with open(self.file_path) as pdb_file:
             for line in pdb_file:
                 if line[0:4] == "ATOM":
@@ -46,9 +49,42 @@ class Protein:
                     else: self.residues[res_id].add_atom(atm)
         for i in self.residues:
             self.residues[i].update_COM()
-            
 
-    def generate_centroid_cliques(self):
+    def get_name(self):
+        return self.name
+
+    def get_file_path(self):
+        return self.file_path
+
+    def get_residues(self):
+        return self.residues
+
+    def get_cliques(self, clique_type, exclude_backbone=False, distance_cutoff=6):
+        if clique_type == "centroid":
+            if self.centroid_cliques == None:
+                self.generate_cliques("centroid", exclude_backbone=exclude_backbone, distance_cutoff=distance_cutoff)
+            return self.centroid_cliques
+        elif clique_type == "atom":
+            if self.atom_cliques == None:
+                self.generate_cliques("atom", exclude_backbone=exclude_backbone, distance_cutoff=distance_cutoff)
+            return self.atom_cliques
+        else: raise Exception("invalid clique type")
+
+    #def get_dist_cutoff(self):
+    #    return self.distance_cutoff
+
+    def get_clique_frequency(self, clique_type):
+        if clique_type == "centroid":
+            if self.centroid_clique_frequency == None:
+                self.freq_analysis("centroid")
+            return self.centroid_clique_frequency
+        elif clique_type == "atom":
+            if self.atom_clique_frequency == None:
+                self.freq_analysis("atom")
+            return self.atom_clique_frequency
+        else: raise Exception("invalid clique type")
+            
+    def generate_centroid_cliques(self, exclude_backbone=False, distance_cutoff=6):
         centroids = []
         centroid_res = {}
         for i in self.residues:
@@ -59,17 +95,17 @@ class Protein:
         edges = []
         for n in tri.simplices:
             edge = sorted([n[0], n[1]])
-            if get_dist(centroids[edge[0]], centroids[edge[1]]) <= self.distance_cutoff: edges.append((edge[0], edge[1]))
+            if get_dist(centroids[edge[0]], centroids[edge[1]]) <= distance_cutoff: edges.append((edge[0], edge[1]))
             edge = sorted([n[0], n[2]])
-            if get_dist(centroids[edge[0]], centroids[edge[1]]) <= self.distance_cutoff: edges.append((edge[0], edge[1]))
+            if get_dist(centroids[edge[0]], centroids[edge[1]]) <= distance_cutoff: edges.append((edge[0], edge[1]))
             edge = sorted([n[0], n[3]])
-            if get_dist(centroids[edge[0]], centroids[edge[1]]) <= self.distance_cutoff: edges.append((edge[0], edge[1]))
+            if get_dist(centroids[edge[0]], centroids[edge[1]]) <= distance_cutoff: edges.append((edge[0], edge[1]))
             edge = sorted([n[1], n[2]])
-            if get_dist(centroids[edge[0]], centroids[edge[1]]) <= self.distance_cutoff: edges.append((edge[0], edge[1]))
+            if get_dist(centroids[edge[0]], centroids[edge[1]]) <= distance_cutoff: edges.append((edge[0], edge[1]))
             edge = sorted([n[1], n[3]])
-            if get_dist(centroids[edge[0]], centroids[edge[1]]) <= self.distance_cutoff: edges.append((edge[0], edge[1]))
+            if get_dist(centroids[edge[0]], centroids[edge[1]]) <= distance_cutoff: edges.append((edge[0], edge[1]))
             edge = sorted([n[2], n[3]])
-            if get_dist(centroids[edge[0]], centroids[edge[1]]) <= self.distance_cutoff: edges.append((edge[0], edge[1]))
+            if get_dist(centroids[edge[0]], centroids[edge[1]]) <= distance_cutoff: edges.append((edge[0], edge[1]))
         graph = nx.Graph(edges)
         self.centroid_cliques = list(nx.find_cliques(graph))
         for i in range(len(self.centroid_cliques)):
@@ -77,11 +113,12 @@ class Protein:
                 self.centroid_cliques[i][j] = centroid_res[tuple(list(centroids[self.centroid_cliques[i][j]]))]
         self.centroid_cliques = np.array(self.centroid_cliques)
 
-    def generate_atom_cliques(self):
+    def generate_atom_cliques(self, exclude_backbone=False, distance_cutoff=6):
         coords = []
         coords_resid = {}
         for i in self.residues:
             for j in self.residues[i].get_atoms():
+
                 coords.append(j.get_coords())
                 coords_resid[j.get_coords()] = i
         coords_array = np.array(coords)
@@ -90,22 +127,22 @@ class Protein:
         edges = []
         for n in tri.simplices:
             edge = sorted([n[0], n[1]])
-            if get_dist(self.residues[coords_resid[tuple(list(coords_array[edge[0]]))]].get_centroid(), self.residues[coords_resid[tuple(list(coords_array[edge[1]]))]].get_centroid()) <= self.distance_cutoff:
+            if get_dist(self.residues[coords_resid[tuple(list(coords_array[edge[0]]))]].get_centroid(), self.residues[coords_resid[tuple(list(coords_array[edge[1]]))]].get_centroid()) <= distance_cutoff:
                 edges.append((edge[0], edge[1]))
             edge = sorted([n[0], n[2]])
-            if get_dist(self.residues[coords_resid[tuple(list(coords_array[edge[0]]))]].get_centroid(), self.residues[coords_resid[tuple(list(coords_array[edge[1]]))]].get_centroid()) <= self.distance_cutoff:
+            if get_dist(self.residues[coords_resid[tuple(list(coords_array[edge[0]]))]].get_centroid(), self.residues[coords_resid[tuple(list(coords_array[edge[1]]))]].get_centroid()) <= distance_cutoff:
                 edges.append((edge[0], edge[1]))
             edge = sorted([n[0], n[3]])
-            if get_dist(self.residues[coords_resid[tuple(list(coords_array[edge[0]]))]].get_centroid(), self.residues[coords_resid[tuple(list(coords_array[edge[1]]))]].get_centroid()) <= self.distance_cutoff:
+            if get_dist(self.residues[coords_resid[tuple(list(coords_array[edge[0]]))]].get_centroid(), self.residues[coords_resid[tuple(list(coords_array[edge[1]]))]].get_centroid()) <= distance_cutoff:
                 edges.append((edge[0], edge[1]))
             edge = sorted([n[1], n[2]])
-            if get_dist(self.residues[coords_resid[tuple(list(coords_array[edge[0]]))]].get_centroid(), self.residues[coords_resid[tuple(list(coords_array[edge[1]]))]].get_centroid()) <= self.distance_cutoff:
+            if get_dist(self.residues[coords_resid[tuple(list(coords_array[edge[0]]))]].get_centroid(), self.residues[coords_resid[tuple(list(coords_array[edge[1]]))]].get_centroid()) <= distance_cutoff:
                 edges.append((edge[0], edge[1]))
             edge = sorted([n[1], n[3]])
-            if get_dist(self.residues[coords_resid[tuple(list(coords_array[edge[0]]))]].get_centroid(), self.residues[coords_resid[tuple(list(coords_array[edge[1]]))]].get_centroid()) <= self.distance_cutoff:
+            if get_dist(self.residues[coords_resid[tuple(list(coords_array[edge[0]]))]].get_centroid(), self.residues[coords_resid[tuple(list(coords_array[edge[1]]))]].get_centroid()) <= distance_cutoff:
                 edges.append((edge[0], edge[1]))
             edge = sorted([n[2], n[3]])
-            if get_dist(self.residues[coords_resid[tuple(list(coords_array[edge[0]]))]].get_centroid(), self.residues[coords_resid[tuple(list(coords_array[edge[1]]))]].get_centroid()) <= self.distance_cutoff:
+            if get_dist(self.residues[coords_resid[tuple(list(coords_array[edge[0]]))]].get_centroid(), self.residues[coords_resid[tuple(list(coords_array[edge[1]]))]].get_centroid()) <= distance_cutoff:
                 edges.append((edge[0], edge[1]))
         graph = nx.Graph(edges)
         self.atom_cliques = list(nx.find_cliques(graph))
@@ -122,11 +159,11 @@ class Protein:
             for j in range(len(self.atom_cliques[i])):
                 self.atom_cliques[i][j] = self.residues[self.atom_cliques[i][j]]
 
-    def generate_cliques(self, clique_type):
+    def generate_cliques(self, clique_type, exclude_backbone=False, distance_cutoff=6):
         if clique_type == "centroid":
-            self.generate_centroid_cliques()
+            self.generate_centroid_cliques(exclude_backbone=exclude_backbone, distance_cutoff=distance_cutoff)
         elif clique_type == "atom":
-            self.generate_atom_cliques()
+            self.generate_atom_cliques(exclude_backbone=exclude_backbone, distance_cutoff=distance_cutoff)
         else: raise Exception("Invalid clique type")
 
     def getMaxMinDistance(self, coords):
@@ -162,20 +199,24 @@ class Protein:
         if clique_type == "centroid":
             for i in self.centroid_cliques:
                 freq_arr[len(i)] += 1
+            self.centroid_clique_frequency = freq_arr
         elif clique_type == "atom":
             for i in self.atom_cliques:
                 freq_arr[len(i)] += 1
+            self.atom_clique_frequency = freq_arr
         else: raise Exception("Invalid clique type")
         print(freq_arr)
+        temp ='''objects = (1, 2, 3, 4, 5, 6)
+        y_pos = np.arange(len(objects))
+        values = freq_arr[1:]
+        plt.bar(y_pos, values)
+        plt.xticks(y_pos, objects)
+        plt.ylabel("count")
+        plt.title("freq of {}-based clique sizes for {}".format(clique_type, self.name))
+        plt.show()'''
         
 
     
-def test():
-    protein = Protein("4quv", "C:\\alpha\\4quv.pdb")
-    protein.generate_cliques("atom")
-    protein.generate_cliques("centroid")
-    protein.freq_analysis("centroid")
-    protein.freq_analysis("atom")
-    protein.distance_analysis("atom")
-    #print(protein.centroid_cliques[0][1].get_centroid())
+protein = Protein("4quv", "C:\\alpha\\4quv.pdb")
+#print(protein.centroid_cliques[0][1].get_centroid())
 
