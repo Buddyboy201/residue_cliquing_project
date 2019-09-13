@@ -10,6 +10,23 @@ import math
 import time
 import matplotlib.pyplot as plt
 
+
+
+#generate clique codes
+#sort clique codes
+#find included bench clique codes in new cliques of any type
+
+def binary_search(arr, val):
+    start = 0
+    end = len(arr)-1
+    while True:
+        mid = int((start+end)/2)
+        #print(start, end)
+        if start >= end and arr[mid] != val: return -1
+        if arr[mid] == val: return mid
+        elif val > arr[mid]: start = mid+1
+        else: end = mid-1
+
 ###############################################################################################
 #TODOs:
 #   make option to exclude/include backbone atoms(50% completion)
@@ -50,6 +67,55 @@ class Protein:
         for i in self.residues:
             self.residues[i].update_COM()
 
+    def convert_to_code(self, clique):
+        clique = list(clique)
+        clique.sort()
+        s = ""
+        l = list(map(str, clique))
+        for i in l: s+= i
+        return int(s)
+
+    def get_sorted_clique_codes(self, cliques):
+        codes = []
+        for i in range(len(cliques)):
+            #print(cliques[i])
+            codes.append(self.convert_to_code(cliques[i]))
+        codes.sort()
+        return codes
+
+    def get_resindex_resid_hash(self, bench_index_file):
+        resindex_resid = {}
+        with open(bench_index_file) as file:
+            for line in file:
+                a = line.strip(" \n").split(" ")
+                resindex_resid[int(a[0])] = int(a[1])
+        return resindex_resid
+
+    def convert_resindex_resid(self, bench_cliques, resindex_resid):
+        for i in range(len(bench_cliques)):
+            for j in range(len(bench_cliques[i])):
+                bench_cliques[i][j] = resindex_resid[bench_cliques[i][j]]
+        return bench_cliques
+
+    def get_bench_cliques(self, bench_file):
+        cliques = []
+        with open(bench_file) as file:
+            for line in file:
+                pos = line.find("|", line.find("|")+1, len(line)-1)
+                clique = list(map(int, line[pos+2:].strip(" \n").split(" ")))
+                cliques.append(clique)
+        return cliques
+
+    def get_included_bench_cliques(self, codes_bench, codes_atom):
+        included = []
+        for i in codes_bench:
+            x = binary_search(codes_atom, i)
+            if x == -1: continue #print("\n\n\n\n\n", x, "\n\n\n\n\n")
+            else:
+                included.append(codes_atom[x])
+                #print("\n\n\n\n\n", x, "\n\n\n\n\n")
+        return included
+    
     def get_name(self):
         return self.name
 
@@ -68,20 +134,6 @@ class Protein:
             if self.atom_cliques == None:
                 self.generate_cliques("atom", exclude_backbone=exclude_backbone, distance_cutoff=distance_cutoff)
             return self.atom_cliques
-        else: raise Exception("invalid clique type")
-
-    #def get_dist_cutoff(self):
-    #    return self.distance_cutoff
-
-    def get_clique_frequency(self, clique_type):
-        if clique_type == "centroid":
-            if self.centroid_clique_frequency == None:
-                self.freq_analysis("centroid")
-            return self.centroid_clique_frequency
-        elif clique_type == "atom":
-            if self.atom_clique_frequency == None:
-                self.freq_analysis("atom")
-            return self.atom_clique_frequency
         else: raise Exception("invalid clique type")
             
     def generate_centroid_cliques(self, exclude_backbone=False, distance_cutoff=6):
@@ -118,7 +170,6 @@ class Protein:
         coords_resid = {}
         for i in self.residues:
             for j in self.residues[i].get_atoms():
-
                 coords.append(j.get_coords())
                 coords_resid[j.get_coords()] = i
         coords_array = np.array(coords)
@@ -178,23 +229,45 @@ class Protein:
         return max_dist, min_dist
 
     def distance_analysis(self, clique_type):
-        if clique_type == "centroid": 
+        if clique_type == "centroid":
+            print("Min/Max CENTROID CLIQUE STATS")
+            clique_max_sum = 0
+            clique_min_sum = 0
+            count = 0
             for i in self.centroid_cliques:
                 coords = []
                 for res in i:
                     coords.append(res.get_centroid())
                 clique_max, clique_min = self.getMaxMinDistance(coords)
-                print(clique_min, clique_max)
+                if clique_max != 0 and clique_min != 0:
+                    clique_max_sum += clique_max
+                    clique_min_sum += clique_min
+                    count += 1
+            clique_max_avg = float(clique_max_sum)/count
+            clique_min_avg = float(clique_min_sum)/count
+                #print("min_dist: {} | max_dist: {}".format(clique_min, clique_max))
+            print("avg_min_dist: {} | avg_max_dist: {}".format(clique_min_avg, clique_max_avg))
         elif clique_type == "atom":
+            print("Min/Max ATOM CLIQUE STATS")
+            clique_max_sum = 0
+            clique_min_sum = 0
+            count = 0
             for i in self.atom_cliques:
                 coords = []
                 for res in i:
                     coords.append(res.get_centroid())
                 clique_max, clique_min = self.getMaxMinDistance(coords)
-                print(clique_min, clique_max)
+                if clique_max != 0 and clique_min != 0:
+                    clique_max_sum += clique_max
+                    clique_min_sum += clique_min
+                    count += 1
+            clique_max_avg = float(clique_max_sum)/count
+            clique_min_avg = float(clique_min_sum)/count
+                #print("min_dist: {} | max_dist: {}".format(clique_min, clique_max))
+            print("avg_min_dist: {} | avg_max_dist: {}".format(clique_min_avg, clique_max_avg))
         else: raise Exception("Invalid clique type")
 
-    def freq_analysis(self, clique_type):
+    def freq_analysis(self, clique_type, bench_cliques_file=None):
         freq_arr = [0,0,0,0,0,0,0]
         if clique_type == "centroid":
             for i in self.centroid_cliques:
@@ -205,18 +278,66 @@ class Protein:
                 freq_arr[len(i)] += 1
             self.atom_clique_frequency = freq_arr
         else: raise Exception("Invalid clique type")
-        print(freq_arr)
-        temp ='''objects = (1, 2, 3, 4, 5, 6)
-        y_pos = np.arange(len(objects))
-        values = freq_arr[1:]
-        plt.bar(y_pos, values)
-        plt.xticks(y_pos, objects)
-        plt.ylabel("count")
-        plt.title("freq of {}-based clique sizes for {}".format(clique_type, self.name))
-        plt.show()'''
-        
+        bench_freq_arr = [0,0,0,0,0,0,0]
+        if bench_cliques_file != None:
+            bench_cliques = self.get_bench_cliques(bench_cliques_file)
+            for i in bench_cliques:
+                bench_freq_arr[len(i)] += 1
+            print("{} v. BENCH CLIQUE SIZE FREQS".format(clique_type))
+            print("{}: {}".format(clique_type, freq_arr[1:]))
+            print("bench: {}".format(bench_freq_arr[1:]))
+        else:
+            print("{} CLIQUE SIZE FREQS".format(clique_type))
+            print("{}: {}".format(clique_type, freq_arr[1:]))
+        #return freq_arr
 
-    
-protein = Protein("4quv", "C:\\alpha\\4quv.pdb")
+    def get_included_bench_cliques(self, codes_bench, codes_new):
+        included = []
+        for i in codes_bench:
+            x = binary_search(codes_new, i)
+            if x != -1:
+                included.append(codes_new[x])
+        return included
+
+    def bench_to_new_analysis(self, clique_type, bench_cliques_file, bench_index_file):
+        resindex_resid = self.get_resindex_resid_hash(bench_index_file)
+        cliques = []
+        new_codes = None
+        if clique_type == "centroid":
+            for i in self.centroid_cliques:
+                clique = []
+                for j in i:
+                    clique.append(j.get_resid())
+                cliques.append(clique)
+            cliques = np.array(cliques)
+            new_codes = self.get_sorted_clique_codes(cliques)
+        elif clique_type == "atom":
+            for i in self.atom_cliques:
+                clique = []
+                for j in i:
+                    clique.append(j.get_resid())
+                cliques.append(clique)
+            cliques = np.array(cliques)
+            new_codes = self.get_sorted_clique_codes(cliques)
+        else: raise Exception("Invalid clique type")
+        bench_cliques = self.get_bench_cliques(bench_cliques_file)
+        bench_cliques = self.convert_resindex_resid(bench_cliques, resindex_resid)
+        bench_codes = self.get_sorted_clique_codes(bench_cliques)
+        included = self.get_included_bench_cliques(bench_codes, new_codes)
+        #print(included)
+        print("{} CLIQUES BENCH INCLUSION STATS".format(clique_type)) 
+        print("% included: {}".format((float(len(included))/len(bench_codes))*100))
+        print("New: {} | Bench: {} | Included: {}".format(len(new_codes), len(bench_codes), len(included)))
+        
+test_bench_cliques_file = "C:\\pdb_data\\domains\\f1a4fa_.nomc.cliques"
+test_bench_index_file = "C:\\pdb_data\\domains\\f1a4fa_.index"
+
+protein = Protein("f1a4fa_", "C:\\pdb_data\\domains\\f1a4fa_.pdb")
+protein.get_cliques("centroid")
+protein.get_cliques("atom")
+protein.distance_analysis("atom")
+protein.freq_analysis("atom", test_bench_cliques_file)
+protein.bench_to_new_analysis("atom", test_bench_cliques_file, test_bench_index_file)
+
 #print(protein.centroid_cliques[0][1].get_centroid())
 
